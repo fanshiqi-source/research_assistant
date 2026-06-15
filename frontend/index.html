@@ -1,0 +1,152 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人研究助理Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 个人研究助理Agent</h1>
+        <div class="session-info">
+            <label>会话ID: <input type="text" id="session_id" value="default" placeholder="输入会话ID"></label>
+            <label><input type="checkbox" id="research_mode"> 强制研究模式</label>
+            <button id="new_session">新会话</button>
+        </div>
+        <div class="chat-box" id="chat_box">
+            <div class="message system">欢迎使用研究助理！输入问题后会自动判断是否需要深度研究。</div>
+        </div>
+        <div class="input-area">
+            <textarea id="user_input" placeholder="输入您的问题..."></textarea>
+            <button id="send_btn">发送</button>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="progress-bar" id="progress_bar" style="display: none;">
+            <div class="progress-label" id="progress_label"></div>
+            <div class="progress-track">
+                <div class="progress-fill" id="progress_fill"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const chatBox = document.getElementById('chat_box');
+        const userInput = document.getElementById('user_input');
+        const sendBtn = document.getElementById('send_btn');
+        const sessionIdInput = document.getElementById('session_id');
+        const researchModeCheck = document.getElementById('research_mode');
+        const newSessionBtn = document.getElementById('new_session');
+        const statusDiv = document.getElementById('status');
+        const progressBar = document.getElementById('progress_bar');
+        const progressLabel = document.getElementById('progress_label');
+        const progressFill = document.getElementById('progress_fill');
+
+        function appendMessage(role, content) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            msgDiv.innerHTML = `<strong>${role === 'user' ? '👤 用户' : '🤖 助手'}</strong><br>${content.replace(/\n/g, '<br>')}`;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showProgress(message, step, total) {
+            progressBar.style.display = 'block';
+            progressLabel.textContent = message;
+            const percentage = total > 0 ? (step / total) * 100 : 0;
+            progressFill.style.width = `${percentage}%`;
+        }
+
+        function hideProgress() {
+            progressBar.style.display = 'none';
+            progressFill.style.width = '0%';
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            const session_id = sessionIdInput.value.trim() || 'default';
+            const research_mode = researchModeCheck.checked;
+            
+            // 构建请求体：只在勾选强制研究模式时，才发送 research_mode: true
+            const body = { message, session_id };
+            if (research_mode) {
+                body.research_mode = true;
+            }
+            
+            appendMessage('user', message);
+            userInput.value = '';
+            statusDiv.textContent = '思考中...';
+            sendBtn.disabled = true;
+            hideProgress();
+            
+            try {
+                const response = await fetch('/chat/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    while (buffer.includes('\n\n')) {
+                        const lineEnd = buffer.indexOf('\n\n');
+                        const line = buffer.substring(0, lineEnd);
+                        buffer = buffer.substring(lineEnd + 2);
+                        
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(5));
+                                if (data.type === 'step') {
+                                    console.log(`步骤 ${data.step}/${data.total}: ${data.message}`);
+                                    showProgress(data.message, data.step, data.total);
+                                } else if (data.type === 'result') {
+                                    appendMessage('assistant', data.response);
+                                    statusDiv.innerHTML = `🔢 Token消耗: ${data.tokens_used} | 🔍 研究模式: ${data.research_used ? '是' : '否'}`;
+                                    hideProgress();
+                                }
+                            } catch (e) {
+                                console.error('解析数据失败:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('请求失败:', err);
+                appendMessage('assistant', `错误: ${err.message}`);
+                statusDiv.textContent = '请求失败';
+                hideProgress();
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        newSessionBtn.addEventListener('click', () => {
+            const newId = 'session_' + Date.now();
+            sessionIdInput.value = newId;
+            chatBox.innerHTML = '<div class="message system">新会话已创建，开始新的对话。</div>';
+            statusDiv.textContent = '';
+            hideProgress();
+        });
+    </script>
+</body>
+</html>

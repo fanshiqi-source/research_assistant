@@ -1,0 +1,26 @@
+# 密钥文件
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# 测试文件
+test_*.py
+conftest.json
+
+# 输出目录
+output/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统
+Thumbs.db
+.DS_Store
