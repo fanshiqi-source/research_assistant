@@ -2,31 +2,31 @@
 """
 MCP+Skill一体化工具调用 - 亮点4
 实现MCP协议风格的工具发现与调用
+支持真正的MCP客户端，自动回退到本地Skill系统
 """
 
 from typing import Dict, Any, List
-from skills import get_skill, _skills
+from utils.mcp_client_adapter import get_mcp_adapter, MCPToolResult
 
 class MCPAdapter:
     """MCP协议适配器，提供统一的工具调用接口"""
     
+    def __init__(self):
+        self._adapter = get_mcp_adapter()
+    
     def list_tools(self) -> List[Dict[str, Any]]:
         """列出所有可用工具（MCP tools/list）"""
-        tools = []
-        for name, skill in _skills.items():
-            tools.append({
-                "name": skill.name,
-                "description": skill.description,
-                "inputSchema": skill.get_schema()
-            })
-        return tools
+        return self._adapter.list_tools()
     
     def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """调用工具（MCP tools/call）"""
-        skill = get_skill(tool_name)
-        if not skill:
-            return {"error": f"Tool '{tool_name}' not found"}
-        return skill.execute(arguments)
+        result = self._adapter.call_tool(tool_name, arguments)
+        return {
+            "content": result.content,
+            "error": result.error,
+            "success": result.success,
+            "client_type": self._adapter.get_client_type()
+        }
     
     def execute_step(self, step_description: str, state: Dict[str, Any]) -> Dict[str, Any]:
         """根据步骤描述自动选择合适的工具执行（智能路由）"""

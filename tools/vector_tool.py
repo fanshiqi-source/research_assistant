@@ -1,15 +1,22 @@
-# skills/vector_search_skill.py
-from skills.base_skill import Skill
+# tools/vector_tool.py
+"""
+向量工具 - VectorTool
+基于ChromaDB实现语义搜索和文档存储
+"""
+
+from tools.base_tool import BaseTool
 from utils.vector_store import get_vector_store
 
-class VectorSearchSkill(Skill):
+class VectorSearchTool(BaseTool):
+    """向量检索工具"""
+    
     @property
     def name(self) -> str:
         return "vector_search"
     
     @property
     def description(self) -> str:
-        return "从知识库中检索相似文档，支持语义搜索"
+        return "从知识库中检索相似文档"
     
     def execute(self, params: dict) -> dict:
         query = params.get("query", "")
@@ -25,14 +32,16 @@ class VectorSearchSkill(Skill):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-class VectorStoreSkill(Skill):
+class VectorStoreTool(BaseTool):
+    """向量存储工具"""
+    
     @property
     def name(self) -> str:
         return "vector_store"
     
     @property
     def description(self) -> str:
-        return "将文档存储到向量知识库中"
+        return "将文档存储到向量知识库"
     
     def execute(self, params: dict) -> dict:
         documents = params.get("documents", [])

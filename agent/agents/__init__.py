@@ -1,17 +1,19 @@
-# skills/__init__.py
-from skills.base_skill import Skill
-from skills.web_search_skill import WebSearchSkill
-from skills.web_fetch_skill import WebFetchSkill
-from skills.report_gen_skill import ReportGenSkill
+# agent/agents/__init__.py
+"""
+Agent模块初始化文件
+注册所有Agent类型供Supervisor调用
+"""
 
-_skills = {
-    "web_search": WebSearchSkill(),
-    "web_fetch": WebFetchSkill(),
-    "report_gen": ReportGenSkill(),
-}
+from agent.agents.base_agent import BaseAgent
+from agent.agents.classifier_agent import ClassifierAgent
+from agent.agents.planner_agent import PlannerAgent
+from agent.agents.researcher_agent import ResearcherAgent
+from agent.agents.chat_agent import ChatAgent
 
-def get_skill(name: str) -> Skill:
-    return _skills.get(name)
-
-def register_skill(name: str, skill: Skill):
-    _skills[name] = skill
+__all__ = [
+    "BaseAgent",
+    "ClassifierAgent",
+    "PlannerAgent",
+    "ResearcherAgent",
+    "ChatAgent"
+]

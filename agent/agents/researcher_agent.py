@@ -1,14 +1,21 @@
 # agent/agents/researcher_agent.py
+"""
+研究执行Agent - 核心研究执行者
+负责按计划执行研究步骤：搜索、阅读、整理、报告
+使用Skill体系调用各类工具完成具体任务
+"""
+
 from agent.agents.base_agent import BaseAgent
 from agent.state import ResearchState
 from skills import get_skill
-from skills.mcp_adapter import MCPAdapter
+from utils.mcp_client_adapter import get_mcp_adapter, MCPToolResult
+from utils.skill_parser import get_skill_parser
 from langchain_core.messages import HumanMessage, AIMessage
 import json
 
 
 class ResearcherAgent(BaseAgent):
-    """研究执行Agent，使用Skill体系调用工具"""
+    """研究执行Agent - 按计划调用Skill工具执行研究步骤"""
 
     def run(self, state: ResearchState) -> dict:
         plan = state.get("plan", [])
@@ -46,6 +53,10 @@ class ResearcherAgent(BaseAgent):
         step_info = f"步骤{idx + 1}/{len(plan)}: {step}..."
         print(f"\n🔍 {step_info}")
 
+        # 获取技能解析器（用于获取可用技能列表）
+        parser = get_skill_parser()
+        available_skills = parser.list_skills()
+
         # -------------------- 报告生成 --------------------
         if "报告" in step:
             skill = get_skill("report_gen")
@@ -75,6 +86,42 @@ class ResearcherAgent(BaseAgent):
 
         # -------------------- 网络搜索 --------------------
         elif "搜索" in step:
+            # 使用技能文档决策辅助
+            if available_skills:
+                print(f"📚 可用技能文档: {available_skills}")
+                prompt = parser.get_decision_prompt(current_topic, step)
+                resp = self.llm.invoke([HumanMessage(content=prompt)])
+                try:
+                    decision = json.loads(resp.content)
+                    if decision.get("decision") == "use_skill":
+                        skill_name = decision.get("skill_name")
+                        parameters = decision.get("parameters", {})
+                        print(f"🤖 LLM决定使用技能: {skill_name}")
+                        print(f"   参数: {parameters}")
+                        
+                        skill = get_skill(skill_name)
+                        if skill:
+                            result = skill.execute(parameters)
+                            # 提取搜索结果中的URLs
+                            urls = []
+                            if result.get("success") and result.get("raw_data"):
+                                try:
+                                    data = json.loads(result["raw_data"])
+                                    urls = [r["url"] for r in data.get("results", [])[:3]]
+                                except:
+                                    pass
+                            
+                            findings.append({
+                                "topic": f"搜索：{parameters.get('query', current_topic)}",
+                                "answer": result.get("answer", "") or result.get("content", "") or str(result),
+                                "urls": urls,
+                                "source": "技能文档驱动"
+                            })
+                            return {"current_step": idx + 1, "findings": findings}
+                except json.JSONDecodeError:
+                    print(f"⚠️ 无法解析LLM决策，使用默认逻辑")
+            
+            # 默认逻辑
             skill = get_skill("web_search")
             if skill:
                 query = current_topic
@@ -124,10 +171,16 @@ class ResearcherAgent(BaseAgent):
             })
             return {"current_step": idx + 1, "findings": findings}
 
-        # -------------------- 其他步骤（回退到MCP适配器）----------------
+        # -------------------- 其他步骤（使用MCP适配器）----------------
         else:
-            adapter = MCPAdapter()
-            adapter.execute_step(step, state)
+            adapter = get_mcp_adapter()
+            result = adapter.call_tool("web_search", {"query": current_topic})
+            if result.success:
+                findings.append({
+                    "topic": f"MCP工具调用: {step}",
+                    "content": result.content[:800],
+                    "source": f"MCP ({adapter.get_client_type()})"
+                })
             return {"current_step": idx + 1, "findings": findings}
 
     def _get_latest_user_message(self, state: ResearchState) -> str:

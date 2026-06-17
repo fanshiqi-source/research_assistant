@@ -1,9 +1,18 @@
+# agent/agents/chat_agent.py
+"""
+对话助手Agent - 自然对话处理模块
+负责处理日常对话、闲聊、以及基于研究发现的追问
+支持向量检索，可从知识库获取相关历史报告作为上下文
+"""
+
 from agent.agents.base_agent import BaseAgent
 from agent.state import ResearchState
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from skills import get_skill
 
 class ChatAgent(BaseAgent):
+    """对话助手Agent - 处理自然对话和基于研究发现的追问"""
+    
     def run(self, state: ResearchState) -> dict:
         # 提取用户消息
         user_msg = ""

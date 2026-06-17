@@ -33,12 +33,19 @@
 - Python 3.10+
 - OpenAI API Key（或 DeepSeek 等兼容 API）
 - Tavily API Key（可选，用于网络搜索）
+- ⚠️ **网络要求**：向量存储（ChromaDB）使用 HuggingFace 的 embedding 模型，**需要梯子**才能下载模型权重
 
 ### 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
+
+> ⚠️ **注意**：如果安装 `sentence-transformers` 或 `chromadb` 时下载模型失败，请确保已配置梯子，或设置镜像源：
+> ```bash
+> # 设置 HuggingFace 镜像（需要梯子）
+> export HF_ENDPOINT=https://hf-mirror.com
+> ```
 
 ### 配置环境变量
 
@@ -63,6 +70,8 @@ DATA_ROOT=D:\桌面\ai agent学习\简历三项目\research_assistant\output
 ```bash
 python main.py
 ```
+
+> ⚠️ **重要**：首次启动时，系统会预热向量存储并下载 HuggingFace embedding 模型（all-MiniLM-L6-v2），**需要梯子**才能下载。如果启动时卡住或报错，请检查网络连接。
 
 服务启动后访问：http://localhost:8000
 
@@ -103,25 +112,39 @@ curl -X POST http://localhost:8000/chat \
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        FastAPI 服务层                           │
-│                         main.py                                 │
+│                        FastAPI 服务层                            │
+│                         main.py                                  │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────────┐
-│                     LangGraph 状态机                            │
-│   ┌─────────┐    ┌─────────┐    ┌────────────┐    ┌─────────┐  │
-│   │classifier│───▶│ planner │───▶│ researcher │───▶│  chat   │  │
-│   └─────────┘    └─────────┘    └────────────┘    └─────────┘  │
+│                     LangGraph 状态机                             │
+│   ┌─────────┐    ┌─────────┐    ┌────────────┐    ┌─────────┐│
+│   │classifier│───▶│ planner │───▶│ researcher │───▶│  chat   ││
+│   └─────────┘    └─────────┘    └────────────┘    └─────────┘│
 └─────────────────────────┬───────────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────────┐
-│                         Skill 工具层                            │
-│    web_search | web_fetch | report_gen | vector_search         │
+│                     Skill-as-Document 层                         │
+│  ┌─────────────────────┐    ┌─────────────────────────────────┐│
+│  │   skills/*.skill.md │    │  SkillParser (LLM阅读决策)       ││
+│  │  (技能描述文档)       │───▶│  解析文档 → LLM决策 → 调用工具   ││
+│  └─────────────────────┘    └─────────────────────────────────┘│
 └─────────────────────────┬───────────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────────┐
-│                        持久化层                                 │
-│              PersistentMemory + MemorySaver                     │
+│                     MCP 工具工厂层                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │web_search    │  │web_fetch     │  │report_gen    │          │
+│  │Tool          │  │Tool          │  │Tool          │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│                        持久化层                                  │
+│   ┌─────────────────┐    ┌─────────────────────────────────┐   │
+│   │SQLite           │    │ChromaDB                         │   │
+│   │(会话历史)        │    │(向量知识库)                      │   │
+│   └─────────────────┘    └─────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -138,18 +161,24 @@ research_assistant/
 │   ├── graph.py              # LangGraph状态机
 │   ├── state.py              # 状态定义
 │   └── supervisor.py         # 中心调度器
-├── skills/                   # 工具技能层
-│   ├── web_search_skill.py   # 网络搜索（Tavily）
-│   ├── web_fetch_skill.py    # 网页抓取
-│   ├── report_gen_skill.py   # 报告生成
-│   ├── vector_search_skill.py # 向量检索与存储
+├── skills/                   # 技能文档（供LLM阅读决策）
+│   ├── *.skill.md            # Markdown格式技能描述文件
 │   └── mcp_adapter.py        # MCP适配器
+├── tools/                    # 工具实现（MCP工具工厂）
+│   ├── __init__.py           # 工具工厂
+│   ├── base_tool.py          # 工具基类
+│   ├── web_search_tool.py    # 网络搜索（Tavily）
+│   ├── web_fetch_tool.py     # 网页抓取
+│   ├── report_gen_tool.py    # 报告生成
+│   └── vector_tool.py        # 向量检索与存储
 ├── memory/                   # 持久化存储
 │   └── persistent_memory.py  # SQLite会话存储
 ├── utils/                    # 工具函数
 │   ├── token_monitor.py      # Token监控
 │   ├── input_normalizer.py   # 输入标准化与意图分析
-│   └── vector_store.py       # ChromaDB向量存储封装
+│   ├── vector_store.py       # ChromaDB向量存储封装
+│   ├── skill_parser.py       # 技能文档解析器
+│   └── mcp_client_adapter.py # MCP客户端适配器
 ├── frontend/                 # 前端界面
 │   ├── index.html            # 主页面
 │   └── style.css             # 样式文件
@@ -179,13 +208,17 @@ research_assistant/
 
 ## 🛠️ Skill 体系
 
-| Skill | 名称 | 功能 |
-|-------|------|------|
-| web_search | WebSearchSkill | 使用 Tavily 搜索网络信息 |
-| web_fetch | WebFetchSkill | 抓取网页正文内容 |
-| report_gen | ReportGenSkill | 生成结构化研究报告，并存入 ChromaDB |
-| vector_search | VectorSearchSkill | 从知识库中语义检索历史报告 |
-| vector_store | VectorStoreSkill | 将文档存入 ChromaDB 知识库 |
+> **架构说明**：采用 Skill-as-Document 模式
+> - `skills/*.skill.md`：技能文档，供 LLM 阅读后智能决策
+> - `tools/*.py`：工具实现，MCP 统一调用执行
+
+| Skill | 名称 | 功能 | 位置 |
+|-------|------|------|------|
+| web_search | WebSearchTool | 使用 Tavily 搜索网络信息 | tools/web_search_tool.py |
+| web_fetch | WebFetchTool | 抓取网页正文内容 | tools/web_fetch_tool.py |
+| report_gen | ReportGenTool | 生成结构化研究报告，并存入 ChromaDB | tools/report_gen_tool.py |
+| vector_search | VectorSearchTool | 从知识库中语义检索历史报告 | tools/vector_tool.py |
+| vector_store | VectorStoreTool | 将文档存入 ChromaDB 知识库 | tools/vector_tool.py |
 
 ## 📊 Token 监控
 

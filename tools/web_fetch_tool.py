@@ -1,9 +1,16 @@
-# skills/web_fetch_skill.py
+# tools/web_fetch_tool.py
+"""
+网页抓取工具 - WebFetchTool
+抓取网页正文内容
+"""
+
 import requests
 from bs4 import BeautifulSoup
-from skills.base_skill import Skill
+from tools.base_tool import BaseTool
 
-class WebFetchSkill(Skill):
+class WebFetchTool(BaseTool):
+    """网页抓取工具"""
+    
     @property
     def name(self) -> str:
         return "web_fetch"

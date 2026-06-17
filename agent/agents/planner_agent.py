@@ -1,10 +1,17 @@
+# agent/agents/planner_agent.py
+"""
+智能推理规划Agent - 亮点6
+基于Plan-and-Execute范式，自动生成研究步骤
+步骤包括：搜索 → 阅读 → 整理 → 报告
+"""
+
 from agent.agents.base_agent import BaseAgent
 from agent.state import ResearchState
 from langchain_core.messages import HumanMessage, SystemMessage
 import json
 
 class PlannerAgent(BaseAgent):
-    """智能推理规划Agent - 始终基于最新用户问题生成计划"""
+    """智能推理规划Agent - 基于最新用户问题生成研究计划"""
 
     def run(self, state: ResearchState) -> dict:
         # 获取最新用户消息

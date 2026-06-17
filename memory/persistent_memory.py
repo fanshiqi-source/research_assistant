@@ -1,4 +1,11 @@
 # memory/persistent_memory.py
+"""
+持久化记忆系统 - 亮点5
+基于SQLite实现会话持久化存储
+支持多会话隔离，每个session_id独立维护上下文
+提供对话历史存储和键值对存储两种模式
+"""
+
 import os
 import sqlite3
 import json
@@ -6,14 +13,23 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from langgraph.checkpoint.memory import MemorySaver
 
-# 使用D盘路径（遵循Conda-Disk-Manager）
+# 使用D盘路径（遵循Conda-Disk-Manager规范）
 DATA_DIR = os.environ.get("DATA_ROOT", "D:/generated_outputs/research_assistant")
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# SQLite数据库路径
 DB_PATH = os.path.join(DATA_DIR, "memory.db")
 
 class PersistentMemory:
-    """会话记忆管理器"""
+    """
+    会话记忆管理器 - 持久化存储对话历史和用户记忆
+    
+    支持两种存储模式：
+    1. 对话历史：存储完整的消息列表
+    2. 键值对存储：存储研究状态等结构化数据
+    
+    使用session_id实现多会话隔离
+    """
     
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path

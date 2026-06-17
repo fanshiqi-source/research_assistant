@@ -1,17 +1,24 @@
-# skills/web_search_skill.py
+# tools/web_search_tool.py
+"""
+网络搜索工具 - WebSearchTool
+使用Tavily API进行网络搜索
+"""
+
 import os
 import json
 from tavily import TavilyClient
-from skills.base_skill import Skill
+from tools.base_tool import BaseTool
 
-class WebSearchSkill(Skill):
+class WebSearchTool(BaseTool):
+    """网络搜索工具"""
+    
     @property
     def name(self) -> str:
         return "web_search"
     
     @property
     def description(self) -> str:
-        return "使用Tavily搜索引擎搜索网络信息"
+        return "使用Tavily搜索引擎搜索网络信息，获取最新资讯"
     
     def execute(self, params: dict) -> dict:
         query = params.get("query", "")
@@ -27,6 +34,10 @@ class WebSearchSkill(Skill):
                     for r in response.get("results", [])
                 ]
             }
-            return {"success": True, "raw_data": json.dumps(results, ensure_ascii=False), "summary": results.get("answer", "")}
+            return {
+                "success": True,
+                "raw_data": json.dumps(results, ensure_ascii=False),
+                "summary": results.get("answer", "")
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
